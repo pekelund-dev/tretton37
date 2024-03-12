@@ -15,42 +15,67 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.*;
 
 public class Tretton37 {
     private static final String WEBSITE_URL = "https://books.toscrape.com/";
     private static final String FILE_PATH = "./files/";
     private static Queue<String> pagesToVisit = new ConcurrentLinkedQueue<>();
+    private static final Set<String> visitedPages = ConcurrentHashMap.newKeySet();
+
+    private static final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     public static void main(String[] args) throws IOException, InterruptedException {
         visitPage(WEBSITE_URL);
-        System.out.println("pagesToVisit.size() = " + pagesToVisit.size());
-        while (!pagesToVisit.isEmpty()) {
-            System.out.println(pagesToVisit.poll());
-        }
+        do {
+            String url = pagesToVisit.poll();
+            executor.submit(() -> {
+                try {
+                    visitPage(url);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            });
+
+            // if the pagesToVisit queue is empty, then wait a second to allow for
+            // late threads to add more pages to it.
+            if (pagesToVisit.isEmpty()) {
+                executor.awaitTermination(1000, TimeUnit.MILLISECONDS);
+            }
+        } while (!pagesToVisit.isEmpty());
+        executor.shutdown();
+        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
     }
 
     private static void visitPage(String url) throws IOException {
-        System.out.println("visitPage: " + url);
+        if (!visitedPages.add(url)) {
+            return;
+        }
 
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpGet request = new HttpGet(url);
             try (CloseableHttpResponse response = httpClient.execute(request)) {
 
-                String content = EntityUtils.toString(response.getEntity());
-                saveToFile(url, content);
+                String contentType = response.getEntity().getContentType().getValue();
+                if (contentType != null && (contentType.equals("image/x-icon") || contentType.equals("image/jpeg"))) {
+                    saveToBinaryFile(url, response.getEntity().getContent());
+                } else {
+                    String content = EntityUtils.toString(response.getEntity());
+                    saveToFile(url, content);
 
-                String baseUrl = url.substring(0, url.lastIndexOf("/") + 1);
-                Document doc = Jsoup.parse(content, baseUrl);
-                Elements textLinks = doc.select("a[href], link[href], img[src], script[src]");
+                    String baseUrl = url.substring(0, url.lastIndexOf("/") + 1);
+                    Document doc = Jsoup.parse(content, baseUrl);
+                    Elements textLinks = doc.select("a[href], link[href], img[src], script[src]");
 
-                for (Element link : textLinks) {
-                    String absUrl = link.absUrl("href");
-                    if (absUrl.isEmpty()) {
-                        absUrl = link.absUrl("src");
-                    }
-                    if (absUrl.contains(WEBSITE_URL)) {
-                        pagesToVisit.add(absUrl);
+                    for (Element link : textLinks) {
+                        String absUrl = link.absUrl("href");
+                        if (absUrl.isEmpty()) {
+                            absUrl = link.absUrl("src");
+                        }
+                        if (absUrl.contains(WEBSITE_URL)) {
+                            pagesToVisit.add(absUrl);
+                        }
                     }
                 }
             }
