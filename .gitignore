@@ -3,3 +3,6 @@
 
 # Build files
 target/*
+
+# Output files
+files/*
