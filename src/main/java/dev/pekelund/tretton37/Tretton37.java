@@ -43,15 +43,15 @@ public class Tretton37 {
                 try {
                     numberOfThreads.incrementAndGet();
                     visitPage(url);
-                    numberOfThreads.decrementAndGet();
                 } catch (IOException e) {
                     e.printStackTrace();
                 } finally{
+                    numberOfThreads.decrementAndGet();
                     phaser.arriveAndDeregister();
                 }
             });
 
-            // if the pagesToVisit queue is empty, then wait a second to allow for
+            // if the pagesToVisit queue is empty, then wait for all threads to finish and then allow
             // late threads to add more pages to it.
             if (pagesToVisit.isEmpty()) {
                 phaser.arriveAndAwaitAdvance();
@@ -69,7 +69,7 @@ public class Tretton37 {
 
         int count = pagesVisited.incrementAndGet();
         if (count % updateFrequency == 0) {
-            System.out.printf("\rPages visited: %d | Pages left to visit: %d | Threads: %d%50s", count, pagesToVisit.size(), numberOfThreads.get(), "");
+            System.out.printf("\rPages visited: %4d | Pages left to visit: %4d | Threads: %4d%50s", count, pagesToVisit.size(), numberOfThreads.get(), "");
         }
         
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
