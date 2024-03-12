@@ -17,6 +17,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Tretton37 {
     private static final String WEBSITE_URL = "https://books.toscrape.com/";
@@ -26,26 +27,39 @@ public class Tretton37 {
 
     private static final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
+    private static final AtomicInteger pagesVisited = new AtomicInteger(0);
+    private static final int updateFrequency = 10; // How often to update the progress.
+
+    private final static Phaser phaser = new Phaser(1); // Start with 1 to prevent the phaser from terminating immediately
+
+    private static final AtomicInteger numberOfThreads = new AtomicInteger(0);
+
     public static void main(String[] args) throws IOException, InterruptedException {
         visitPage(WEBSITE_URL);
         do {
             String url = pagesToVisit.poll();
+            phaser.register();
             executor.submit(() -> {
                 try {
+                    numberOfThreads.incrementAndGet();
                     visitPage(url);
+                    numberOfThreads.decrementAndGet();
                 } catch (IOException e) {
                     e.printStackTrace();
+                } finally{
+                    phaser.arriveAndDeregister();
                 }
             });
 
             // if the pagesToVisit queue is empty, then wait a second to allow for
             // late threads to add more pages to it.
             if (pagesToVisit.isEmpty()) {
-                executor.awaitTermination(1000, TimeUnit.MILLISECONDS);
+                phaser.arriveAndAwaitAdvance();
             }
         } while (!pagesToVisit.isEmpty());
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        System.out.println("\nFinished");
     }
 
     private static void visitPage(String url) throws IOException {
@@ -53,6 +67,11 @@ public class Tretton37 {
             return;
         }
 
+        int count = pagesVisited.incrementAndGet();
+        if (count % updateFrequency == 0) {
+            System.out.print("\rPages visited: " + count + " | Pages left to visit: " + pagesToVisit.size() + " | Threads: " + numberOfThreads.get() + "                                    ");
+        }
+        
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpGet request = new HttpGet(url);
             try (CloseableHttpResponse response = httpClient.execute(request)) {
@@ -93,5 +112,13 @@ public class Tretton37 {
         try (PrintWriter out = new PrintWriter(file)) {
             out.println(content);
         }
+    }
+
+    private static void saveToBinaryFile(String url, InputStream inputStream) throws IOException {
+        String fileName = url.replace(WEBSITE_URL, "");
+
+        File file = new File(FILE_PATH + fileName);
+        file.getParentFile().mkdirs();
+        Files.copy(inputStream, file.toPath(), StandardCopyOption.REPLACE_EXISTING);
     }
 }
