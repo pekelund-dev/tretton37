@@ -69,7 +69,7 @@ public class Tretton37 {
 
         int count = pagesVisited.incrementAndGet();
         if (count % updateFrequency == 0) {
-            System.out.print("\rPages visited: " + count + " | Pages left to visit: " + pagesToVisit.size() + " | Threads: " + numberOfThreads.get() + "                                    ");
+            System.out.printf("\rPages visited: %d | Pages left to visit: %d | Threads: %d%50s", count, pagesToVisit.size(), numberOfThreads.get(), "");
         }
         
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
