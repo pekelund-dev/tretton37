@@ -27,13 +27,13 @@ public class Tretton37 {
 
     private static final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
+    // AtomicInteger to track the number of pages visited in a thread-safe manner
     private static final AtomicInteger pagesVisited = new AtomicInteger(0);
     private static final int updateFrequency = 10; // How often to update the progress.
-
+    // Phaser for advanced thread synchronization, ensuring coordinated progress updates
     private final static Phaser phaser = new Phaser(1); // Start with 1 to prevent the phaser from terminating immediately
-
+    // AtomicInteger to track the number of active threads
     private static final AtomicInteger numberOfThreads = new AtomicInteger(0);
-
     public static void main(String[] args) throws IOException, InterruptedException {
         visitPage(WEBSITE_URL);
         do {
