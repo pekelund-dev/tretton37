@@ -94,12 +94,4 @@ public class Tretton37 {
             out.println(content);
         }
     }
-
-    private static void saveToBinaryFile(String url, InputStream inputStream) throws IOException {
-        String fileName = url.replace(WEBSITE_URL, "");
-
-        File file = new File(FILE_PATH + fileName);
-        file.getParentFile().mkdirs();
-        Files.copy(inputStream, file.toPath(), StandardCopyOption.REPLACE_EXISTING);
-    }
 }
