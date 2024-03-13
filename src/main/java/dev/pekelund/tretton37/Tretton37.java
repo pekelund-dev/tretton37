@@ -1,6 +1,5 @@
 package dev.pekelund.tretton37;
 
-import org.apache.http.ParseException;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -22,18 +21,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Tretton37 {
     private static final String WEBSITE_URL = "https://books.toscrape.com/";
     private static final String FILE_PATH = "./files/";
+
+    // Queue to track the pages to visit, and a Set to track the pages already visited
     private static Queue<String> pagesToVisit = new ConcurrentLinkedQueue<>();
     private static final Set<String> visitedPages = ConcurrentHashMap.newKeySet();
 
+    // ExecutorService to manage the threads
     private static final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-
-    // AtomicInteger to track the number of pages visited in a thread-safe manner
-    private static final AtomicInteger pagesVisited = new AtomicInteger(0);
-    private static final int updateFrequency = 10; // How often to update the progress.
+    // How often to update the progress.
+    private static final int updateFrequency = 10; 
     // Phaser for advanced thread synchronization, ensuring coordinated progress updates
     private final static Phaser phaser = new Phaser(1); // Start with 1 to prevent the phaser from terminating immediately
     // AtomicInteger to track the number of active threads
     private static final AtomicInteger numberOfThreads = new AtomicInteger(0);
+    
     public static void main(String[] args) throws IOException, InterruptedException {
         visitPage(WEBSITE_URL);
         do {
@@ -59,15 +60,23 @@ public class Tretton37 {
         } while (!pagesToVisit.isEmpty());
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        System.out.printf("\rPages visited: %4d | Pages left to visit: %4d | Threads: %4d%50s", visitedPages.size(), pagesToVisit.size(), numberOfThreads.get(), "");
         System.out.println("\nFinished");
     }
 
+    /**
+     * Visit a web page and download the content, parse the links, and saving to file.
+     * Found links are added to the pagesToVisit queue only if they have not already been visited.
+     *
+     * @param  url  the URL of the web page to be visited
+     * @throws IOException  if an I/O error occurs while visiting the web page
+     */
     private static void visitPage(String url) throws IOException {
         if (!visitedPages.add(url)) {
             return;
         }
 
-        int count = pagesVisited.incrementAndGet();
+        int count = visitedPages.size();
         if (count % updateFrequency == 0) {
             System.out.printf("\rPages visited: %4d | Pages left to visit: %4d | Threads: %4d%50s", count, pagesToVisit.size(), numberOfThreads.get(), "");
         }
@@ -77,9 +86,12 @@ public class Tretton37 {
             try (CloseableHttpResponse response = httpClient.execute(request)) {
 
                 String contentType = response.getEntity().getContentType().getValue();
+                // Only save image files,  
                 if (contentType != null && (contentType.equals("image/x-icon") || contentType.equals("image/jpeg"))) {
                     saveToBinaryFile(url, response.getEntity().getContent());
                 } else {
+                    // Parse other files and extract links to other pages, add them to
+                    // the pagesToVisit queue and save the file to disk.
                     String content = EntityUtils.toString(response.getEntity());
                     saveToFile(url, content);
 
@@ -101,6 +113,13 @@ public class Tretton37 {
         }
     }
 
+    /**
+     * Saves content to a file at the specified URL.
+     *
+     * @param  url      the URL of the file
+     * @param  content  the content to be saved
+     * @throws IOException  if an I/O error occurs
+     */
     private static void saveToFile(String url, String content) throws IOException {
         String fileName = url.replace(WEBSITE_URL, "");
         if (fileName.isEmpty()) {
@@ -114,6 +133,13 @@ public class Tretton37 {
         }
     }
 
+    /**
+     * Save the contents from an InputStream to a binary file at a specified URL.
+     *
+     * @param  url          the URL of the file to be saved
+     * @param  inputStream  the InputStream containing the data to be saved
+     * @throws IOException  if an I/O error occurs
+     */
     private static void saveToBinaryFile(String url, InputStream inputStream) throws IOException {
         String fileName = url.replace(WEBSITE_URL, "");
 
